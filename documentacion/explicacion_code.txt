@@ -1,221 +1,496 @@
----
+=================================================================
+DOCUMENTACION DEL PROYECTO INFORMATICO
+Aproximacion por Minimos Cuadrados
 
-## Imports
+Universidad de Mendoza - Facultad de Ingenieria
+Analisis Numerico 2026
 
-```python
-import numpy as np
-from scipy import integrate
-import matplotlib.pyplot as plt
-```
+Autores:
+    Francisco Martin Gallardo
+    Santiago Ariel Martinez
+    Luciano Panella
 
-- `numpy` → para resolver el sistema lineal con `linalg.solve`
-- `scipy.integrate` → para calcular integrales numéricamente
-- `matplotlib` → para los gráficos
+Carrera:  Ingenieria en Sistemas
+Docente:  Bioing. Emiliano Aparicio
+Entrega:  Antes del 31 de agosto de 2026
+=================================================================
 
----
 
-## Herramienta 1 — `integrar(f, g, a, b)`
+-----------------------------------------------------------------
+1. DESCRIPCION GENERAL
+-----------------------------------------------------------------
 
-```python
-def integrar(f, g, a, b):
-    resultado, _ = integrate.quad(lambda x: f(x) * g(x), a, b)
-    return resultado
-```
+Este proyecto implementa una herramienta interactiva en Python
+para resolver problemas de aproximacion funcional usando el
+metodo de los minimos cuadrados.
 
-Esta función calcula el **producto escalar continuo**:
+El usuario puede ingresar su propia funcion o sus propios datos
+y el programa calcula la mejor aproximacion posible dentro de
+un subespacio dado, junto con el error del metodo y un grafico.
 
-⟨f, g⟩ = ∫ₐᵇ f(x) · g(x) dx
+El programa cubre tres casos:
 
-`integrate.quad` es la cuadratura de Gauss-Legendre de scipy. Recibe una función y un intervalo, y devuelve dos cosas: el resultado y el error estimado. El `_` descarta el error porque no lo necesitamos.
+  1. Aproximacion continua:
+     Dada una funcion f(x) conocida, se encuentra la mejor
+     funcion aproximante fi*(x) en un intervalo [a, b].
 
-El `lambda x: f(x) * g(x)` es simplemente la forma de decirle "integrá el producto de las dos funciones". Se usa porque `quad` necesita recibir una sola función de una variable.
+  2. Aproximacion discreta:
+     Dado un conjunto de puntos medidos (xk, yk), se encuentra
+     la funcion que mejor los representa.
 
----
+  3. Aproximacion discreta no lineal:
+     Cuando los datos responden a una ley exponencial del tipo
+     p(x) = a * e^(m*x), se aplica una transformacion
+     logaritmica para reducirlo al caso lineal.
 
-## Herramienta 2 — `producto_discreto(lista_f, lista_g)`
+Para ejecutar:
+    pip install numpy scipy matplotlib
+    python minimos_cuadrados.py
 
-```python
-def producto_discreto(lista_f, lista_g):
-    suma = 0.0
-    for k in range(len(lista_f)):
-        suma += lista_f[k] * lista_g[k]
-    return suma
-```
 
-Es el **producto escalar discreto**: ⟨f, g⟩ = Σ f(xₖ) · g(xₖ)
+-----------------------------------------------------------------
+2. FUNDAMENTO MATEMATICO
+-----------------------------------------------------------------
 
-Cuando no tenés una función continua sino puntos medidos, el producto escalar deja de ser una integral y pasa a ser esta suma. El loop recorre cada punto k y acumula el producto.
+El metodo de los minimos cuadrados busca el elemento fi* dentro
+de un subespacio S con base B = {fi1, fi2, ..., fin} que
+minimiza la distancia al elemento u que se quiere aproximar.
 
----
+Esto se reduce a resolver el sistema de ecuaciones normales:
 
-## Herramienta 3 — `resolver_sistema(A, B)`
+        A * X = B
 
-```python
-def resolver_sistema(A, B):
-    print(...)  # muestra A y B
-    coefs = np.linalg.solve(np.array(A), np.array(B))
-    return coefs
-```
+Donde:
+  A[j][i] = <fi_i, fi_j>   producto escalar entre funciones base
+  B[j]    = <u, fi_j>      producto escalar de u con la base
+  X       = [a1, a2, ..., an]   coeficientes (incognitas)
 
-Toma la matriz A y el vector B que ya armaste, los muestra por pantalla, y resuelve el sistema **A · X = B** con `np.linalg.solve`. Eso te da los coeficientes a₁, a₂, ..., aₙ. 
-Antes de resolver convierte las listas de Python en arrays de numpy porque `linalg.solve` los necesita en ese formato.
+La matriz A es SIMETRICA y DEFINIDA POSITIVA (llamada "matriz
+normal"), lo que garantiza solucion unica.
 
----
 
-## Aproximación Continua
+2.1 Mejor aproximacion
 
-**Qué resuelve:** tenés una función conocida `f(x) = sen(x)` y querés aproximarla con una combinación lineal de funciones base. Elegiste la base `{x, x³, x⁵}` porque `sen(x)` es impar, entonces sus funciones base también tienen que ser impares.
+Una vez resuelto el sistema, la mejor aproximacion es:
 
-**Paso 1 — Definir funciones:**
-```python
-def f(x):    return np.sin(x)
-def phi1(x): return x
-def phi2(x): return x ** 3
-def phi3(x): return x ** 5
+    fi*(x) = a1*fi1(x) + a2*fi2(x) + ... + an*fin(x)
 
-base = [phi1, phi2, phi3]
-a, b = -1.0, 1.0
-```
-Son funciones normales de Python agrupadas en una lista para poder recorrerlas con un loop.
 
-**Paso 2 — Armar la matriz A:**
-```python
-A = []
-for j in range(n):
-    fila = []
-    for i in range(n):
-        fila.append(integrar(base[i], base[j], a, b))
-    A.append(fila)
-```
-El doble `for` construye la matriz de productos escalares. Cada celda `A[j][i]` es `⟨φᵢ, φⱼ⟩`, es decir la integral de `phi_i * phi_j`. La matriz queda simétrica porque `⟨φᵢ, φⱼ⟩ = ⟨φⱼ, φᵢ⟩`.
+2.2 Error del metodo
 
-**Paso 3 — Armar el vector B:**
-```python
-B = []
-for j in range(n):
-    B.append(integrar(f, base[j], a, b))
-```
-Cada elemento `B[j]` es `⟨f, φⱼ⟩`, la integral de `f * phi_j`. Esto representa qué tanto "se parece" `f` a cada función base.
+El error proviene del Teorema 2: <u - fi*, fi> = 0 para todo
+fi del subespacio. Desarrollando algebraicamente:
 
-**Paso 4 — Resolver:**
-```python
-coefs = resolver_sistema(A, B)
-a1, a2, a3 = coefs[0], coefs[1], coefs[2]
-```
-Resuelve A·X = B y extrae los tres coeficientes.
+    E = || u - fi* || = sqrt( ||u||^2 - suma(ai * <u, fi_i>) )
 
-**Paso 5 — Definir f\*(x):**
-```python
-def f_aprox(x):
-    return a1 * phi1(x) + a2 * phi2(x) + a3 * phi3(x)
-```
-La mejor aproximación es simplemente la combinación lineal con los coeficientes encontrados.
 
-**Paso 6 — Error:**
-```python
-norma_cuad = integrar(f, f, a, b)
-correccion = a1 * integrar(f, phi1, a, b) \
-           + a2 * integrar(f, phi2, a, b) \
-           + a3 * integrar(f, phi3, a, b)
-E = np.sqrt(abs(norma_cuad - correccion))
-```
-La fórmula viene del Teorema 2. `norma_cuad` es `||f||²` = ∫f²dx. La `correccion` es Σ aᵢ·⟨f, φᵢ⟩. El `abs()` es por si hay un error de redondeo numérico muy chico que dé negativo.
+2.3 Producto escalar segun el caso
 
-**Paso 7 — Gráfico:**
-```python
-x_vals  = np.linspace(a, b, 300)   # 300 puntos entre -1 y 1
-y_orig  = [f(x) for x in x_vals]   # evalúa f en cada punto
-y_aprox = [f_aprox(x) for x in x_vals]
+  Caso continuo:   <f, g> = integral de a a b de f(x)*g(x) dx
+  Caso discreto:   <f, g> = suma de f(xk) * g(xk)
 
-plt.plot(x_vals, y_orig,  "b-",  label="f(x) = sen(x)")
-plt.plot(x_vals, y_aprox, "r--", label="f*(x)")
-plt.show()
-```
-`np.linspace` genera 300 valores equiespaciados. Los dos `for` evalúan cada función en esos 300 puntos para poder graficarlos.
 
----
+-----------------------------------------------------------------
+3. ESTRUCTURA DEL CODIGO
+-----------------------------------------------------------------
 
-## Aproximación Discreta
+El programa esta dividido en funciones simples:
 
-**Qué resuelve:** no tenés una función continua sino 5 puntos medidos (espesor, tiempo de corte) y querés encontrar la función que mejor los represente.
+  evaluar(expresion, x)         Convierte un string matematico
+                                en valor numerico usando eval()
 
-La lógica es idéntica a la continua, con una diferencia clave: el producto escalar es una **suma** en vez de una integral.
+  crear_funcion(expresion)      Devuelve una funcion de Python
+                                a partir de un string
 
-**Paso extra — Evaluar la base en los puntos:**
-```python
-base_vals = []
-for i in range(n):
-    vals = []
-    for k in range(m):
-        vals.append(base[i](x_datos[k]))
-    base_vals.append(vals)
-```
-Acá calculás de antemano `[φᵢ(x₁), φᵢ(x₂), ..., φᵢ(xₘ)]` para cada función base. Lo guardás porque lo vas a usar varias veces (para A, para B, para el error).
+  integrar(f, g, a, b)          Producto escalar continuo.
+                                Usa scipy.integrate.quad
+                                (cuadratura de Gauss-Legendre)
 
-**Armar A y B con sumas:**
-```python
-A[j][i] = producto_discreto(base_vals[i], base_vals[j])
-B[j]    = producto_discreto(y_datos, base_vals[j])
-```
-En vez de `integrar(...)` usás `producto_discreto(...)`. El resto es exactamente igual.
+  producto_discreto(lf, lg)     Producto escalar discreto.
+                                Suma de lf[k] * lg[k]
 
----
+  resolver_sistema(A, B)        Muestra y resuelve A*X = B
+                                con numpy.linalg.solve
 
-## Aproximación Discreta No Lineal
+  aproximacion_continua()       Caso continuo interactivo
 
-**Qué resuelve:** tenés puntos que responden a `p(x) = a · eᵐˣ`, que no es combinación lineal de ninguna base. No podés aplicar el método directamente.
+  aproximacion_discreta()       Caso discreto interactivo
 
-**El truco — linearización:**
+  aproximacion_no_lineal()      Caso no lineal interactivo
 
-```python
-# p(x) = a * e^(m*x)
-# Aplico ln en ambos lados:
-# ln(p(x)) = ln(a) + m*x
-# Esto es lineal:  f*(x) = h·1 + k·x   donde h=ln(a) y k=m
-```
+  menu()                        Menu principal del programa
 
-```python
-y_ln = []
-for yi in y_datos:
-    y_ln.append(np.log(yi))
-```
-Transformás los datos: en vez de trabajar con `y`, trabajás con `ln(y)`. Ahora sí es un problema lineal con base `{1, x}`.
 
-Resolvés igual que en el caso discreto, pero usando `y_ln` en lugar de `y_datos`:
-```python
-B[j] = producto_discreto(y_ln, base_vals[j])
-```
+3.1 evaluar() y crear_funcion()
 
-**Deshacer la transformación:**
-```python
-h = coefs[0]      # h = ln(a)
-k = coefs[1]      # k = m
-a_val = np.exp(h) # a = e^h
-m_val = k
-```
-Los coeficientes que encontraste son `h` y `k` en el espacio logarítmico. Para volver al original: `a = eʰ` y `m = k`.
+Permiten que el usuario ingrese funciones matematicas como texto.
 
-**El error** en el caso no lineal se calcula directamente como diferencia punto a punto en el espacio original:
-```python
-suma_dif_cuad = sum((y_datos[k] - p(x_datos[k]))**2 for k in range(m_pts))
-E = np.sqrt(suma_dif_cuad)
-```
-Esto es `√(Σ (yₖ - p(xₖ))²)`, la norma de la diferencia entre los datos reales y los estimados.
+    def evaluar(expresion, x):
+        return float(eval(expresion, {
+            "x": x,
+            "sin": np.sin,  "cos": np.cos,  "tan": np.tan,
+            "exp": np.exp,  "log": np.log,  "sqrt": np.sqrt,
+            "pi":  np.pi,   "e":   np.e,    "abs":  abs
+        }))
 
----
+    def crear_funcion(expresion):
+        def f(x):
+            return evaluar(expresion, x)
+        return f
 
-## Menú
+La funcion evaluar() ejecuta el string en un entorno controlado
+donde solo estan disponibles las funciones matematicas de numpy.
+crear_funcion() envuelve esa evaluacion en una funcion reutilizable
+que puede pasarse como argumento a integrar() o usarse en un loop.
 
-```python
-while True:
-    opcion = input("\n  Opción: ").strip()
-    if opcion == "1":
-        aproximacion_continua()
-    elif opcion == "2":
-        aproximacion_discreta()
-    ...
-    elif opcion == "0":
-        break
-```
 
-Loop infinito que sigue pidiendo opciones hasta que el usuario elija `0`. El `.strip()` elimina espacios o saltos de línea accidentales del input.
+3.2 integrar(f, g, a, b)
+
+Calcula el producto escalar continuo usando scipy.integrate.quad,
+que implementa cuadratura de Gauss-Legendre adaptativa.
+
+    def integrar(f, g, a, b):
+        resultado, _ = integrate.quad(lambda x: f(x) * g(x), a, b)
+        return resultado
+
+integrate.quad devuelve dos valores: el resultado y el error
+estimado de la integracion. El _ descarta el error porque no
+lo necesitamos para este problema.
+
+
+3.3 producto_discreto(lista_f, lista_g)
+
+Calcula la suma de los productos punto a punto.
+
+    def producto_discreto(lista_f, lista_g):
+        suma = 0.0
+        for k in range(len(lista_f)):
+            suma += lista_f[k] * lista_g[k]
+        return suma
+
+Es la version discreta del producto escalar. Se usa cuando
+no hay funcion continua sino puntos medidos.
+
+
+3.4 resolver_sistema(A, B)
+
+Muestra el sistema en pantalla y lo resuelve con numpy.
+
+    def resolver_sistema(A, B):
+        print("Matriz A:", A)
+        print("Vector B:", B)
+        coefs = np.linalg.solve(np.array(A), np.array(B))
+        return coefs
+
+np.linalg.solve implementa eliminacion gaussiana con pivoteo
+parcial. Es necesario convertir A y B a arrays de numpy antes
+de pasarlos porque fueron construidos como listas de Python.
+
+
+-----------------------------------------------------------------
+4. APROXIMACION CONTINUA
+-----------------------------------------------------------------
+
+4.1 Descripcion
+
+Se conoce la funcion f(x) y se quiere reemplazarla por una mas
+simple fi*(x) definida como combinacion lineal de funciones base.
+
+El usuario ingresa:
+  - La funcion f(x) a aproximar  (ej: sin(x))
+  - El intervalo [a, b]          (ej: -1 y 1)
+  - Las funciones base            (ej: x, x**3, x**5)
+
+
+4.2 Pasos del codigo
+
+  Paso 1: Lee la funcion, el intervalo y la base del usuario.
+
+  Paso 2: Arma la matriz A con un doble for.
+          Cada celda A[j][i] = integrar(base[i], base[j], a, b)
+
+  Paso 3: Arma el vector B con un for.
+          Cada elemento B[j] = integrar(f, base[j], a, b)
+
+  Paso 4: Llama a resolver_sistema(A, B) y obtiene los coefs.
+
+  Paso 5: Construye fi*(x) como combinacion lineal:
+          fi*(x) = a1*fi1(x) + a2*fi2(x) + a3*fi3(x)
+
+  Paso 6: Calcula el error:
+          norma_cuad  = integrar(f, f, a, b)
+          correccion  = sum(coefs[i] * integrar(f, base[i], a, b))
+          E = sqrt( abs(norma_cuad - correccion) )
+
+  Paso 7: Muestra la tabla y el grafico comparativo.
+
+
+4.3 Ejemplo resuelto
+
+Problema: aproximar f(x) = sen(x) con base {x, x^3, x^5}
+          en el intervalo [-1, 1].
+
+Esta base se elige porque sen(x) es una funcion impar, y x,
+x^3, x^5 tambien son impares. Esto hace que los integrales
+entre funciones pares e impares sean cero, simplificando el
+sistema considerablemente.
+
+Entrada del usuario:
+    Funcion f(x) a aproximar: sin(x)
+    Limite inferior (a): -1
+    Limite superior (b): 1
+    Cuantas funciones tiene la base? 3
+    phi1(x) = x
+    phi2(x) = x**3
+    phi3(x) = x**5
+
+Calculo de la matriz A (cada A[j][i] = integral de fi_i * fi_j):
+
+         fi1=x      fi2=x^3    fi3=x^5
+  fi1=x  0.66667    0.40000    0.28571
+  fi2=x3 0.40000    0.28571    0.22222
+  fi3=x5 0.28571    0.22222    0.18182
+
+Calculo del vector B (cada B[j] = integral de f * fi_j):
+
+  B[0] = integral(sen(x) * x)   = 0.60234
+  B[1] = integral(sen(x) * x^3) = 0.35420
+  B[2] = integral(sen(x) * x^5) = 0.25016
+
+Solucion del sistema A * X = B:
+
+  a1 =  0.99998421
+  a2 = -0.16652418
+  a3 =  0.00801811
+
+Funcion aproximada:
+    fi*(x) = 0.99998*x - 0.16652*x^3 + 0.00802*x^5
+
+Error del metodo:
+    E = 0.0000026237
+
+Tabla comparativa:
+
+    x         sen(x)       fi*(x)       |diferencia|
+    -1.0000   -0.841471    -0.841478     0.000007
+    -0.5000   -0.479426    -0.479427     0.000001
+     0.0000    0.000000     0.000000     0.000000
+     0.5000    0.479426     0.479427     0.000001
+     1.0000    0.841471     0.841478     0.000007
+
+El error es extremadamente chico (2.6e-6) porque la base {x, x^3,
+x^5} respeta la simetria impar de sen(x), haciendo la aproximacion
+casi exacta en el intervalo [-1, 1].
+
+
+-----------------------------------------------------------------
+5. APROXIMACION DISCRETA
+-----------------------------------------------------------------
+
+5.1 Descripcion
+
+No se conoce f(x) de forma analitica. Se dispone de un conjunto
+de puntos medidos o experimentales (xk, yk). El objetivo es
+encontrar la funcion fi*(x) que mejor los representa.
+
+La diferencia con el caso continuo esta en el producto escalar:
+en lugar de integrar se suma sobre los puntos de datos.
+
+    <f, g> = suma de f(xk) * g(xk)
+
+El usuario ingresa:
+  - Cantidad de puntos de datos
+  - Cada par (x, y) de la tabla
+  - Las funciones base
+
+
+5.2 Pasos del codigo
+
+  Paso 1: Lee los puntos (xk, yk) y la base del usuario.
+
+  Paso 2: Evalua cada funcion base en todos los xk y guarda
+          los resultados en base_vals[i][k] = fi_i(xk).
+
+  Paso 3: Arma la matriz A con doble for.
+          A[j][i] = producto_discreto(base_vals[i], base_vals[j])
+
+  Paso 4: Arma el vector B con un for.
+          B[j] = producto_discreto(y_datos, base_vals[j])
+
+  Paso 5: Resuelve el sistema y obtiene los coeficientes.
+
+  Paso 6: Calcula el error y muestra la tabla comparativa.
+
+  Paso 7: Opcionalmente estima fi*(x) para un x nuevo.
+
+
+5.3 Ejemplo resuelto
+
+Problema: datos del tiempo de corte con soplete de oxiacetileno.
+
+    E (pulgadas)   t (minutos)
+         1            0.046
+         2            0.059
+         3            0.072
+         4            0.084
+         5            0.100
+
+Base elegida: polinomios de Chebyshev de grado 0, 1 y 2.
+    fi1(x) = 1
+    fi2(x) = x
+    fi3(x) = 2*x^2 - 1
+
+Entrada del usuario:
+    Cuantos puntos de datos tenes? 5
+    x1: 1   y1: 0.046
+    x2: 2   y2: 0.059
+    x3: 3   y3: 0.072
+    x4: 4   y4: 0.084
+    x5: 5   y5: 0.100
+    Cuantas funciones tiene la base? 3
+    phi1(x) = 1
+    phi2(x) = x
+    phi3(x) = 2*x**2-1
+
+Matriz A y vector B:
+
+         fi1    fi2    fi3    |  B[j]
+  fi1      5     15    105    |  0.361
+  fi2     15     55    435    |  1.216
+  fi3    105    435   3701    |  9.187
+
+Solucion del sistema A * X = B:
+
+  a1 = 0.03498
+  a2 = 0.01116
+  a3 = 0.00018
+
+Funcion aproximada:
+    fi*(x) = 0.03498 + 0.01116*x + 0.00018*(2x^2 - 1)
+
+Error del metodo:
+    E = 0.00145
+
+Tabla comparativa:
+
+    x       t real     fi*(x)     |diferencia|
+    1.0     0.04600    0.04631      0.00031
+    2.0     0.05900    0.05854      0.00046
+    3.0     0.07200    0.07149      0.00051
+    4.0     0.08400    0.08514      0.00114
+    5.0     0.10000    0.09951      0.00049
+
+Prediccion para E = 2.5 pulgadas:
+    fi*(2.5) = 0.064925 min
+
+
+-----------------------------------------------------------------
+6. APROXIMACION DISCRETA NO LINEAL
+-----------------------------------------------------------------
+
+6.1 Descripcion
+
+Cuando la funcion que mejor representa los datos NO puede
+expresarse como combinacion lineal de una base, estamos en
+el caso no lineal y el metodo no se puede aplicar directamente.
+
+La solucion es buscar una transformacion algebraica que
+convierta el problema en lineal. Este programa resuelve el
+caso mas comun: la funcion exponencial.
+
+    p(x) = a * e^(m*x)
+
+
+6.2 Tecnica de linearizacion
+
+Se aplica logaritmo natural en ambos miembros:
+
+    ln( p(x) ) = ln(a) + m*x
+
+Definiendo  f(x) = ln(p(x)),  h = ln(a)  y  k = m:
+
+    f(x) = h * 1  +  k * x
+
+Esto es un caso lineal con base {1, x}.
+Se resuelve el sistema normal usando ln(y) en lugar de y.
+Al final se deshace la transformacion:
+
+    a = e^h          m = k
+
+
+6.3 Pasos del codigo
+
+  Paso 1: Lee los puntos (xk, yk) del usuario.
+
+  Paso 2: Aplica ln a todos los y:
+          y_ln[k] = ln(yk)
+
+  Paso 3: Resuelve el caso discreto lineal con base {1, x}
+          usando y_ln en lugar de y_datos.
+
+  Paso 4: Recupera los parametros originales:
+          a = e^(coefs[0])     m = coefs[1]
+
+  Paso 5: Calcula el error en el espacio original:
+          E = sqrt( suma de (yk - p(xk))^2 )
+
+  Paso 6: Muestra la tabla y el grafico con la curva exponencial.
+
+
+6.4 Ejemplo resuelto
+
+Problema: ajustar p(x) = a * e^(m*x) a los siguientes datos.
+
+    x     y
+    1     7
+    2    11
+    3    17
+    4    27
+
+Transformacion logaritmica:
+
+    x     y      ln(y)
+    1     7      1.945910
+    2    11      2.397895
+    3    17      2.833213
+    4    27      3.295837
+
+Sistema de ecuaciones normales (base {1, x} con datos y_ln):
+
+         fi1=1   fi2=x   |   B[j]
+  fi1=1    4      10     |  10.47286
+  fi2=x   10      30     |  28.42469
+
+Solucion del sistema:
+
+  h = a1 = 1.49693935
+  k = a2 = 0.44850982
+
+Deshacemos la transformacion:
+
+  a = e^h = e^1.49693935 = 4.46799317
+  m = k   = 0.44850982
+
+Funcion encontrada:
+    p(x) = 4.467993 * e^(0.448510 * x)
+
+Error del metodo:
+    E = 0.20973276
+
+Verificacion con los datos originales:
+
+    x     y real     p(x)        |diferencia|
+    1.0     7.0      6.996774      0.003226
+    2.0    11.0     10.956786      0.043214
+    3.0    17.0     17.158073      0.158073
+    4.0    27.0     26.869146      0.130854
+
+La curva exponencial encontrada representa bien el crecimiento
+de los datos. Las diferencias son pequenas en relacion a la
+magnitud de los valores de y.
+
+
+=================================================================
+Francisco Martin Gallardo  |  Santiago Ariel Martinez | Luciano Panella
+Analisis Numerico 2026  |  Facultad de Ingenieria  |  UM
+=================================================================
