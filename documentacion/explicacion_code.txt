@@ -1,0 +1,221 @@
+---
+
+## Imports
+
+```python
+import numpy as np
+from scipy import integrate
+import matplotlib.pyplot as plt
+```
+
+- `numpy` → para resolver el sistema lineal con `linalg.solve`
+- `scipy.integrate` → para calcular integrales numéricamente
+- `matplotlib` → para los gráficos
+
+---
+
+## Herramienta 1 — `integrar(f, g, a, b)`
+
+```python
+def integrar(f, g, a, b):
+    resultado, _ = integrate.quad(lambda x: f(x) * g(x), a, b)
+    return resultado
+```
+
+Esta función calcula el **producto escalar continuo**:
+
+⟨f, g⟩ = ∫ₐᵇ f(x) · g(x) dx
+
+`integrate.quad` es la cuadratura de Gauss-Legendre de scipy. Recibe una función y un intervalo, y devuelve dos cosas: el resultado y el error estimado. El `_` descarta el error porque no lo necesitamos.
+
+El `lambda x: f(x) * g(x)` es simplemente la forma de decirle "integrá el producto de las dos funciones". Se usa porque `quad` necesita recibir una sola función de una variable.
+
+---
+
+## Herramienta 2 — `producto_discreto(lista_f, lista_g)`
+
+```python
+def producto_discreto(lista_f, lista_g):
+    suma = 0.0
+    for k in range(len(lista_f)):
+        suma += lista_f[k] * lista_g[k]
+    return suma
+```
+
+Es el **producto escalar discreto**: ⟨f, g⟩ = Σ f(xₖ) · g(xₖ)
+
+Cuando no tenés una función continua sino puntos medidos, el producto escalar deja de ser una integral y pasa a ser esta suma. El loop recorre cada punto k y acumula el producto.
+
+---
+
+## Herramienta 3 — `resolver_sistema(A, B)`
+
+```python
+def resolver_sistema(A, B):
+    print(...)  # muestra A y B
+    coefs = np.linalg.solve(np.array(A), np.array(B))
+    return coefs
+```
+
+Toma la matriz A y el vector B que ya armaste, los muestra por pantalla, y resuelve el sistema **A · X = B** con `np.linalg.solve`. Eso te da los coeficientes a₁, a₂, ..., aₙ. 
+Antes de resolver convierte las listas de Python en arrays de numpy porque `linalg.solve` los necesita en ese formato.
+
+---
+
+## Aproximación Continua
+
+**Qué resuelve:** tenés una función conocida `f(x) = sen(x)` y querés aproximarla con una combinación lineal de funciones base. Elegiste la base `{x, x³, x⁵}` porque `sen(x)` es impar, entonces sus funciones base también tienen que ser impares.
+
+**Paso 1 — Definir funciones:**
+```python
+def f(x):    return np.sin(x)
+def phi1(x): return x
+def phi2(x): return x ** 3
+def phi3(x): return x ** 5
+
+base = [phi1, phi2, phi3]
+a, b = -1.0, 1.0
+```
+Son funciones normales de Python agrupadas en una lista para poder recorrerlas con un loop.
+
+**Paso 2 — Armar la matriz A:**
+```python
+A = []
+for j in range(n):
+    fila = []
+    for i in range(n):
+        fila.append(integrar(base[i], base[j], a, b))
+    A.append(fila)
+```
+El doble `for` construye la matriz de productos escalares. Cada celda `A[j][i]` es `⟨φᵢ, φⱼ⟩`, es decir la integral de `phi_i * phi_j`. La matriz queda simétrica porque `⟨φᵢ, φⱼ⟩ = ⟨φⱼ, φᵢ⟩`.
+
+**Paso 3 — Armar el vector B:**
+```python
+B = []
+for j in range(n):
+    B.append(integrar(f, base[j], a, b))
+```
+Cada elemento `B[j]` es `⟨f, φⱼ⟩`, la integral de `f * phi_j`. Esto representa qué tanto "se parece" `f` a cada función base.
+
+**Paso 4 — Resolver:**
+```python
+coefs = resolver_sistema(A, B)
+a1, a2, a3 = coefs[0], coefs[1], coefs[2]
+```
+Resuelve A·X = B y extrae los tres coeficientes.
+
+**Paso 5 — Definir f\*(x):**
+```python
+def f_aprox(x):
+    return a1 * phi1(x) + a2 * phi2(x) + a3 * phi3(x)
+```
+La mejor aproximación es simplemente la combinación lineal con los coeficientes encontrados.
+
+**Paso 6 — Error:**
+```python
+norma_cuad = integrar(f, f, a, b)
+correccion = a1 * integrar(f, phi1, a, b) \
+           + a2 * integrar(f, phi2, a, b) \
+           + a3 * integrar(f, phi3, a, b)
+E = np.sqrt(abs(norma_cuad - correccion))
+```
+La fórmula viene del Teorema 2. `norma_cuad` es `||f||²` = ∫f²dx. La `correccion` es Σ aᵢ·⟨f, φᵢ⟩. El `abs()` es por si hay un error de redondeo numérico muy chico que dé negativo.
+
+**Paso 7 — Gráfico:**
+```python
+x_vals  = np.linspace(a, b, 300)   # 300 puntos entre -1 y 1
+y_orig  = [f(x) for x in x_vals]   # evalúa f en cada punto
+y_aprox = [f_aprox(x) for x in x_vals]
+
+plt.plot(x_vals, y_orig,  "b-",  label="f(x) = sen(x)")
+plt.plot(x_vals, y_aprox, "r--", label="f*(x)")
+plt.show()
+```
+`np.linspace` genera 300 valores equiespaciados. Los dos `for` evalúan cada función en esos 300 puntos para poder graficarlos.
+
+---
+
+## Aproximación Discreta
+
+**Qué resuelve:** no tenés una función continua sino 5 puntos medidos (espesor, tiempo de corte) y querés encontrar la función que mejor los represente.
+
+La lógica es idéntica a la continua, con una diferencia clave: el producto escalar es una **suma** en vez de una integral.
+
+**Paso extra — Evaluar la base en los puntos:**
+```python
+base_vals = []
+for i in range(n):
+    vals = []
+    for k in range(m):
+        vals.append(base[i](x_datos[k]))
+    base_vals.append(vals)
+```
+Acá calculás de antemano `[φᵢ(x₁), φᵢ(x₂), ..., φᵢ(xₘ)]` para cada función base. Lo guardás porque lo vas a usar varias veces (para A, para B, para el error).
+
+**Armar A y B con sumas:**
+```python
+A[j][i] = producto_discreto(base_vals[i], base_vals[j])
+B[j]    = producto_discreto(y_datos, base_vals[j])
+```
+En vez de `integrar(...)` usás `producto_discreto(...)`. El resto es exactamente igual.
+
+---
+
+## Aproximación Discreta No Lineal
+
+**Qué resuelve:** tenés puntos que responden a `p(x) = a · eᵐˣ`, que no es combinación lineal de ninguna base. No podés aplicar el método directamente.
+
+**El truco — linearización:**
+
+```python
+# p(x) = a * e^(m*x)
+# Aplico ln en ambos lados:
+# ln(p(x)) = ln(a) + m*x
+# Esto es lineal:  f*(x) = h·1 + k·x   donde h=ln(a) y k=m
+```
+
+```python
+y_ln = []
+for yi in y_datos:
+    y_ln.append(np.log(yi))
+```
+Transformás los datos: en vez de trabajar con `y`, trabajás con `ln(y)`. Ahora sí es un problema lineal con base `{1, x}`.
+
+Resolvés igual que en el caso discreto, pero usando `y_ln` en lugar de `y_datos`:
+```python
+B[j] = producto_discreto(y_ln, base_vals[j])
+```
+
+**Deshacer la transformación:**
+```python
+h = coefs[0]      # h = ln(a)
+k = coefs[1]      # k = m
+a_val = np.exp(h) # a = e^h
+m_val = k
+```
+Los coeficientes que encontraste son `h` y `k` en el espacio logarítmico. Para volver al original: `a = eʰ` y `m = k`.
+
+**El error** en el caso no lineal se calcula directamente como diferencia punto a punto en el espacio original:
+```python
+suma_dif_cuad = sum((y_datos[k] - p(x_datos[k]))**2 for k in range(m_pts))
+E = np.sqrt(suma_dif_cuad)
+```
+Esto es `√(Σ (yₖ - p(xₖ))²)`, la norma de la diferencia entre los datos reales y los estimados.
+
+---
+
+## Menú
+
+```python
+while True:
+    opcion = input("\n  Opción: ").strip()
+    if opcion == "1":
+        aproximacion_continua()
+    elif opcion == "2":
+        aproximacion_discreta()
+    ...
+    elif opcion == "0":
+        break
+```
+
+Loop infinito que sigue pidiendo opciones hasta que el usuario elija `0`. El `.strip()` elimina espacios o saltos de línea accidentales del input.
