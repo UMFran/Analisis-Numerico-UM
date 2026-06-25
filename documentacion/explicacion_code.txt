@@ -1,496 +1,360 @@
+"""
 =================================================================
-DOCUMENTACION DEL PROYECTO INFORMATICO
-Aproximacion por Minimos Cuadrados
+DOCUMENTACIÓN DEL PROYECTO INFORMÁTICO
+Aproximación por Mínimos Cuadrados — Discreta y No Lineal
 
-Universidad de Mendoza - Facultad de Ingenieria
-Analisis Numerico 2026
+Universidad de Mendoza — Facultad de Ingeniería
+Análisis Numérico 2026
 
 Autores:
     Francisco Martin Gallardo
     Santiago Ariel Martinez
     Luciano Panella
 
-Carrera:  Ingenieria en Sistemas
-Docente:  Bioing. Emiliano Aparicio
-Entrega:  Antes del 31 de agosto de 2026
+Docente: Bioing. Emiliano Aparicio
+Entrega: Antes del 31 de agosto de 2026
 =================================================================
 
 
 -----------------------------------------------------------------
-1. DESCRIPCION GENERAL
+1. DESCRIPCIÓN GENERAL
 -----------------------------------------------------------------
 
-Este proyecto implementa una herramienta interactiva en Python
-para resolver problemas de aproximacion funcional usando el
-metodo de los minimos cuadrados.
+Este programa resuelve problemas de aproximación funcional por
+el método de los mínimos cuadrados, en el caso DISCRETO.
+Dado un conjunto de puntos medidos (xk, yk), encuentra la función
+f*(x) que mejor los representa.
 
-El usuario puede ingresar su propia funcion o sus propios datos
-y el programa calcula la mejor aproximacion posible dentro de
-un subespacio dado, junto con el error del metodo y un grafico.
+Se cubren dos variantes:
 
-El programa cubre tres casos:
+  1. Aproximación discreta lineal:
+     El usuario elige la base de funciones y el programa arma y
+     resuelve el sistema de ecuaciones normales.
 
-  1. Aproximacion continua:
-     Dada una funcion f(x) conocida, se encuentra la mejor
-     funcion aproximante fi*(x) en un intervalo [a, b].
-
-  2. Aproximacion discreta:
-     Dado un conjunto de puntos medidos (xk, yk), se encuentra
-     la funcion que mejor los representa.
-
-  3. Aproximacion discreta no lineal:
-     Cuando los datos responden a una ley exponencial del tipo
-     p(x) = a * e^(m*x), se aplica una transformacion
-     logaritmica para reducirlo al caso lineal.
+  2. Aproximación discreta NO LINEAL:
+     La función buscada no es combinación lineal de ninguna base.
+     Se aplica una transformación algebraica para convertirla en
+     lineal y resolverla con el mismo método.
+     Se cubren 4 modelos:
+       - f(x) = a * e^(b*x + c*x²)     [Exponencial cuadrática]
+       - f(x) = a * cos(b*x + π)        [Coseno]
+       - f(x) = a / (b + x)             [Hipérbola]
+       - f(x) = a*x / (1 + b*e^(c*x))  [Logística]
 
 Para ejecutar:
-    pip install numpy scipy matplotlib
+    pip install numpy matplotlib
     python minimos_cuadrados.py
 
 
 -----------------------------------------------------------------
-2. FUNDAMENTO MATEMATICO
+2. FUNDAMENTO MATEMÁTICO
 -----------------------------------------------------------------
 
-El metodo de los minimos cuadrados busca el elemento fi* dentro
-de un subespacio S con base B = {fi1, fi2, ..., fin} que
-minimiza la distancia al elemento u que se quiere aproximar.
-
-Esto se reduce a resolver el sistema de ecuaciones normales:
+El método busca el vector fi* dentro de un subespacio S con base
+B = {fi1, ..., fin} que minimiza la distancia al conjunto de
+puntos dado. Se resuelve el sistema de ecuaciones normales:
 
         A * X = B
 
-Donde:
-  A[j][i] = <fi_i, fi_j>   producto escalar entre funciones base
-  B[j]    = <u, fi_j>      producto escalar de u con la base
-  X       = [a1, a2, ..., an]   coeficientes (incognitas)
+donde:
+    A[j][i] = suma de fi_i(xk) * fi_j(xk)
+    B[j]    = suma de yk * fi_j(xk)
+    X       = [a1, a2, ..., an]  (los coeficientes)
 
-La matriz A es SIMETRICA y DEFINIDA POSITIVA (llamada "matriz
-normal"), lo que garantiza solucion unica.
+La matriz A es simétrica y definida positiva (garantiza solución
+única). La mejor aproximación:
 
+    f*(x) = a1*fi1(x) + a2*fi2(x) + ... + an*fin(x)
 
-2.1 Mejor aproximacion
+El error del método:
 
-Una vez resuelto el sistema, la mejor aproximacion es:
-
-    fi*(x) = a1*fi1(x) + a2*fi2(x) + ... + an*fin(x)
-
-
-2.2 Error del metodo
-
-El error proviene del Teorema 2: <u - fi*, fi> = 0 para todo
-fi del subespacio. Desarrollando algebraicamente:
-
-    E = || u - fi* || = sqrt( ||u||^2 - suma(ai * <u, fi_i>) )
-
-
-2.3 Producto escalar segun el caso
-
-  Caso continuo:   <f, g> = integral de a a b de f(x)*g(x) dx
-  Caso discreto:   <f, g> = suma de f(xk) * g(xk)
+    E = sqrt( suma de (yk - f*(xk))^2 )
 
 
 -----------------------------------------------------------------
-3. ESTRUCTURA DEL CODIGO
+3. HERRAMIENTAS BASE
 -----------------------------------------------------------------
 
-El programa esta dividido en funciones simples:
+evaluar(expresion, x)
+    Convierte un string como "sin(x)" o "x**2" en un valor
+    numérico evaluado en x. Usa eval() en un entorno seguro donde
+    solo están disponibles las funciones de numpy (sin, cos, exp,
+    log, sqrt, pi, e).
 
-  evaluar(expresion, x)         Convierte un string matematico
-                                en valor numerico usando eval()
+crear_funcion(expresion)
+    Envuelve evaluar() en una función reutilizable. Si el usuario
+    escribe "x**3", esta función devuelve f tal que f(2)=8, f(3)=27.
 
-  crear_funcion(expresion)      Devuelve una funcion de Python
-                                a partir de un string
+producto_discreto(lista_f, lista_g)
+    Calcula el producto escalar discreto: suma de f[k]*g[k].
+    Es el núcleo del método. El doble for que arma la matriz A
+    llama a esta función para cada par (i, j) de la base.
 
-  integrar(f, g, a, b)          Producto escalar continuo.
-                                Usa scipy.integrate.quad
-                                (cuadratura de Gauss-Legendre)
-
-  producto_discreto(lf, lg)     Producto escalar discreto.
-                                Suma de lf[k] * lg[k]
-
-  resolver_sistema(A, B)        Muestra y resuelve A*X = B
-                                con numpy.linalg.solve
-
-  aproximacion_continua()       Caso continuo interactivo
-
-  aproximacion_discreta()       Caso discreto interactivo
-
-  aproximacion_no_lineal()      Caso no lineal interactivo
-
-  menu()                        Menu principal del programa
-
-
-3.1 evaluar() y crear_funcion()
-
-Permiten que el usuario ingrese funciones matematicas como texto.
-
-    def evaluar(expresion, x):
-        return float(eval(expresion, {
-            "x": x,
-            "sin": np.sin,  "cos": np.cos,  "tan": np.tan,
-            "exp": np.exp,  "log": np.log,  "sqrt": np.sqrt,
-            "pi":  np.pi,   "e":   np.e,    "abs":  abs
-        }))
-
-    def crear_funcion(expresion):
-        def f(x):
-            return evaluar(expresion, x)
-        return f
-
-La funcion evaluar() ejecuta el string en un entorno controlado
-donde solo estan disponibles las funciones matematicas de numpy.
-crear_funcion() envuelve esa evaluacion en una funcion reutilizable
-que puede pasarse como argumento a integrar() o usarse en un loop.
-
-
-3.2 integrar(f, g, a, b)
-
-Calcula el producto escalar continuo usando scipy.integrate.quad,
-que implementa cuadratura de Gauss-Legendre adaptativa.
-
-    def integrar(f, g, a, b):
-        resultado, _ = integrate.quad(lambda x: f(x) * g(x), a, b)
-        return resultado
-
-integrate.quad devuelve dos valores: el resultado y el error
-estimado de la integracion. El _ descarta el error porque no
-lo necesitamos para este problema.
-
-
-3.3 producto_discreto(lista_f, lista_g)
-
-Calcula la suma de los productos punto a punto.
-
-    def producto_discreto(lista_f, lista_g):
+    Código:
         suma = 0.0
         for k in range(len(lista_f)):
             suma += lista_f[k] * lista_g[k]
         return suma
 
-Es la version discreta del producto escalar. Se usa cuando
-no hay funcion continua sino puntos medidos.
-
-
-3.4 resolver_sistema(A, B)
-
-Muestra el sistema en pantalla y lo resuelve con numpy.
-
-    def resolver_sistema(A, B):
-        print("Matriz A:", A)
-        print("Vector B:", B)
-        coefs = np.linalg.solve(np.array(A), np.array(B))
-        return coefs
-
-np.linalg.solve implementa eliminacion gaussiana con pivoteo
-parcial. Es necesario convertir A y B a arrays de numpy antes
-de pasarlos porque fueron construidos como listas de Python.
+resolver_sistema(A, B)
+    Muestra la matriz A y el vector B en pantalla y resuelve
+    A*X = B con np.linalg.solve (eliminación gaussiana con
+    pivoteo parcial de numpy).
 
 
 -----------------------------------------------------------------
-4. APROXIMACION CONTINUA
+4. UTILIDADES COMPARTIDAS PARA LOS CASOS NO LINEALES
 -----------------------------------------------------------------
 
-4.1 Descripcion
+Estas funciones evitan repetir código en los 4 modelos.
 
-Se conoce la funcion f(x) y se quiere reemplazarla por una mas
-simple fi*(x) definida como combinacion lineal de funciones base.
+pedir_datos()
+    Pide la cantidad de puntos y los pares (x, y) al usuario.
+    Devuelve x_datos e y_datos como listas de Python.
 
-El usuario ingresa:
-  - La funcion f(x) a aproximar  (ej: sin(x))
-  - El intervalo [a, b]          (ej: -1 y 1)
-  - Las funciones base            (ej: x, x**3, x**5)
+mostrar_tabla(x_datos, y_datos, p)
+    Recibe la función ajustada p(x) y calcula el error:
+        E = sqrt( suma de (yk - p(xk))^2 )
+    Luego muestra la tabla comparando y real vs p(x).
 
+graficar(x_datos, y_datos, p, titulo, label_p, xlabel, ylabel)
+    Genera el gráfico con matplotlib: puntos azules para los datos
+    originales y línea roja para la curva ajustada.
 
-4.2 Pasos del codigo
-
-  Paso 1: Lee la funcion, el intervalo y la base del usuario.
-
-  Paso 2: Arma la matriz A con un doble for.
-          Cada celda A[j][i] = integrar(base[i], base[j], a, b)
-
-  Paso 3: Arma el vector B con un for.
-          Cada elemento B[j] = integrar(f, base[j], a, b)
-
-  Paso 4: Llama a resolver_sistema(A, B) y obtiene los coefs.
-
-  Paso 5: Construye fi*(x) como combinacion lineal:
-          fi*(x) = a1*fi1(x) + a2*fi2(x) + a3*fi3(x)
-
-  Paso 6: Calcula el error:
-          norma_cuad  = integrar(f, f, a, b)
-          correccion  = sum(coefs[i] * integrar(f, base[i], a, b))
-          E = sqrt( abs(norma_cuad - correccion) )
-
-  Paso 7: Muestra la tabla y el grafico comparativo.
-
-
-4.3 Ejemplo resuelto
-
-Problema: aproximar f(x) = sen(x) con base {x, x^3, x^5}
-          en el intervalo [-1, 1].
-
-Esta base se elige porque sen(x) es una funcion impar, y x,
-x^3, x^5 tambien son impares. Esto hace que los integrales
-entre funciones pares e impares sean cero, simplificando el
-sistema considerablemente.
-
-Entrada del usuario:
-    Funcion f(x) a aproximar: sin(x)
-    Limite inferior (a): -1
-    Limite superior (b): 1
-    Cuantas funciones tiene la base? 3
-    phi1(x) = x
-    phi2(x) = x**3
-    phi3(x) = x**5
-
-Calculo de la matriz A (cada A[j][i] = integral de fi_i * fi_j):
-
-         fi1=x      fi2=x^3    fi3=x^5
-  fi1=x  0.66667    0.40000    0.28571
-  fi2=x3 0.40000    0.28571    0.22222
-  fi3=x5 0.28571    0.22222    0.18182
-
-Calculo del vector B (cada B[j] = integral de f * fi_j):
-
-  B[0] = integral(sen(x) * x)   = 0.60234
-  B[1] = integral(sen(x) * x^3) = 0.35420
-  B[2] = integral(sen(x) * x^5) = 0.25016
-
-Solucion del sistema A * X = B:
-
-  a1 =  0.99998421
-  a2 = -0.16652418
-  a3 =  0.00801811
-
-Funcion aproximada:
-    fi*(x) = 0.99998*x - 0.16652*x^3 + 0.00802*x^5
-
-Error del metodo:
-    E = 0.0000026237
-
-Tabla comparativa:
-
-    x         sen(x)       fi*(x)       |diferencia|
-    -1.0000   -0.841471    -0.841478     0.000007
-    -0.5000   -0.479426    -0.479427     0.000001
-     0.0000    0.000000     0.000000     0.000000
-     0.5000    0.479426     0.479427     0.000001
-     1.0000    0.841471     0.841478     0.000007
-
-El error es extremadamente chico (2.6e-6) porque la base {x, x^3,
-x^5} respeta la simetria impar de sen(x), haciendo la aproximacion
-casi exacta en el intervalo [-1, 1].
+predecir(p)
+    Pregunta si el usuario quiere estimar para un x nuevo y
+    muestra p(x_pred).
 
 
 -----------------------------------------------------------------
-5. APROXIMACION DISCRETA
+5. CASO NO LINEAL 1: f(x) = a * e^(b*x + c*x²)
 -----------------------------------------------------------------
 
-5.1 Descripcion
+Descripción:
+    Exponencial con exponente cuadrático. Crece más rápido que
+    una exponencial simple. Aparece en calentamiento acelerado,
+    consumo energético, degradación de materiales.
 
-No se conoce f(x) de forma analitica. Se dispone de un conjunto
-de puntos medidos o experimentales (xk, yk). El objetivo es
-encontrar la funcion fi*(x) que mejor los representa.
+Linearización:
+    Aplicamos ln en ambos miembros:
+        ln(y) = ln(a) + b*x + c*x²
 
-La diferencia con el caso continuo esta en el producto escalar:
-en lugar de integrar se suma sobre los puntos de datos.
+    Con z = ln(y), h = ln(a), k1 = b, k2 = c:
+        z = h*1 + k1*x + k2*x²   →   lineal con base {1, x, x²}
 
-    <f, g> = suma de f(xk) * g(xk)
+Recuperación:
+        a = e^h       b = k1       c = k2
 
-El usuario ingresa:
-  - Cantidad de puntos de datos
-  - Cada par (x, y) de la tabla
-  - Las funciones base
-
-
-5.2 Pasos del codigo
-
-  Paso 1: Lee los puntos (xk, yk) y la base del usuario.
-
-  Paso 2: Evalua cada funcion base en todos los xk y guarda
-          los resultados en base_vals[i][k] = fi_i(xk).
-
-  Paso 3: Arma la matriz A con doble for.
-          A[j][i] = producto_discreto(base_vals[i], base_vals[j])
-
-  Paso 4: Arma el vector B con un for.
-          B[j] = producto_discreto(y_datos, base_vals[j])
-
-  Paso 5: Resuelve el sistema y obtiene los coeficientes.
-
-  Paso 6: Calcula el error y muestra la tabla comparativa.
-
-  Paso 7: Opcionalmente estima fi*(x) para un x nuevo.
-
-
-5.3 Ejemplo resuelto
-
-Problema: datos del tiempo de corte con soplete de oxiacetileno.
-
-    E (pulgadas)   t (minutos)
-         1            0.046
-         2            0.059
-         3            0.072
-         4            0.084
-         5            0.100
-
-Base elegida: polinomios de Chebyshev de grado 0, 1 y 2.
-    fi1(x) = 1
-    fi2(x) = x
-    fi3(x) = 2*x^2 - 1
-
-Entrada del usuario:
-    Cuantos puntos de datos tenes? 5
-    x1: 1   y1: 0.046
-    x2: 2   y2: 0.059
-    x3: 3   y3: 0.072
-    x4: 4   y4: 0.084
-    x5: 5   y5: 0.100
-    Cuantas funciones tiene la base? 3
-    phi1(x) = 1
-    phi2(x) = x
-    phi3(x) = 2*x**2-1
-
-Matriz A y vector B:
-
-         fi1    fi2    fi3    |  B[j]
-  fi1      5     15    105    |  0.361
-  fi2     15     55    435    |  1.216
-  fi3    105    435   3701    |  9.187
-
-Solucion del sistema A * X = B:
-
-  a1 = 0.03498
-  a2 = 0.01116
-  a3 = 0.00018
-
-Funcion aproximada:
-    fi*(x) = 0.03498 + 0.01116*x + 0.00018*(2x^2 - 1)
-
-Error del metodo:
-    E = 0.00145
-
-Tabla comparativa:
-
-    x       t real     fi*(x)     |diferencia|
-    1.0     0.04600    0.04631      0.00031
-    2.0     0.05900    0.05854      0.00046
-    3.0     0.07200    0.07149      0.00051
-    4.0     0.08400    0.08514      0.00114
-    5.0     0.10000    0.09951      0.00049
-
-Prediccion para E = 2.5 pulgadas:
-    fi*(2.5) = 0.064925 min
+Pasos en el código (resolver_caso1):
+    1. z[k] = ln(y[k]) para cada punto
+    2. Base {1, x, x²} evaluada en los puntos
+    3. Arma A y B con producto_discreto usando los z
+    4. Resuelve → h, k1, k2
+    5. a = e^h, y define p(x) = a*exp(b*x + c*x²)
 
 
 -----------------------------------------------------------------
-6. APROXIMACION DISCRETA NO LINEAL
+6. CASO NO LINEAL 2: f(x) = a * cos(b*x + π)
 -----------------------------------------------------------------
 
-6.1 Descripcion
+Descripción:
+    Coseno con desfase π. Aparece en señales con inversión de
+    fase, oscilaciones amortiguadas, corriente alterna.
 
-Cuando la funcion que mejor representa los datos NO puede
-expresarse como combinacion lineal de una base, estamos en
-el caso no lineal y el metodo no se puede aplicar directamente.
+Simplificación:
+    Propiedad trigonométrica: cos(θ + π) = -cos(θ)
+        f(x) = a * cos(b*x + π) = -a * cos(b*x)
 
-La solucion es buscar una transformacion algebraica que
-convierta el problema en lineal. Este programa resuelve el
-caso mas comun: la funcion exponencial.
+    Con b conocido, definimos g(x) = -cos(b*x).
+    La ecuación queda: f(x) = a * g(x)  →  sistema 1×1 en a.
 
-    p(x) = a * e^(m*x)
+¿Cómo conocer b?
+    El usuario estima b del período T de los datos:
+        T = 2π/b   →   b = 2π/T
+    (el período es la distancia entre dos máximos consecutivos)
 
+Sistema 1×1:
+    A = [[ suma de g(xk)^2 ]]
+    B = [  suma de yk*g(xk)  ]
+    a = B[0] / A[0][0]
 
-6.2 Tecnica de linearizacion
-
-Se aplica logaritmo natural en ambos miembros:
-
-    ln( p(x) ) = ln(a) + m*x
-
-Definiendo  f(x) = ln(p(x)),  h = ln(a)  y  k = m:
-
-    f(x) = h * 1  +  k * x
-
-Esto es un caso lineal con base {1, x}.
-Se resuelve el sistema normal usando ln(y) en lugar de y.
-Al final se deshace la transformacion:
-
-    a = e^h          m = k
+Pasos en el código (resolver_caso2):
+    1. g_vals[k] = -cos(b_val * xk)
+    2. Sistema 1×1 con producto_discreto
+    3. Resuelve → a
+    4. Define p(x) = a * cos(b_val*x + pi)
 
 
-6.3 Pasos del codigo
+-----------------------------------------------------------------
+7. CASO NO LINEAL 3: f(x) = a / (b + x)
+-----------------------------------------------------------------
 
-  Paso 1: Lee los puntos (xk, yk) del usuario.
+Descripción:
+    Función hiperbólica decreciente. Aparece en velocidades de
+    reacción química, tiempos de espera en colas, ley de
+    Michaelis-Menten, modelos de saturación de recursos.
 
-  Paso 2: Aplica ln a todos los y:
-          y_ln[k] = ln(yk)
+Linearización:
+    Tomamos el recíproco en ambos miembros:
+        1/y = (b + x)/a = b/a + (1/a)*x
 
-  Paso 3: Resuelve el caso discreto lineal con base {1, x}
-          usando y_ln en lugar de y_datos.
+    Con z = 1/y, h = b/a, k = 1/a:
+        z = h*1 + k*x   →   lineal con base {1, x}
 
-  Paso 4: Recupera los parametros originales:
-          a = e^(coefs[0])     m = coefs[1]
+Recuperación:
+        a = 1/k       b = h/k
 
-  Paso 5: Calcula el error en el espacio original:
-          E = sqrt( suma de (yk - p(xk))^2 )
+Pasos en el código (resolver_caso3):
+    1. z[k] = 1/y[k] para cada punto
+    2. Base {1, x} evaluada en los puntos
+    3. Arma A y B con producto_discreto usando los z
+    4. Resuelve → h, k
+    5. a = 1/k, b = h/k, define p(x) = a/(b+x)
 
-  Paso 6: Muestra la tabla y el grafico con la curva exponencial.
+
+-----------------------------------------------------------------
+8. CASO NO LINEAL 4: f(x) = a*x / (1 + b*e^(c*x))
+-----------------------------------------------------------------
+
+Descripción:
+    Función logística generalizada. Crece inicialmente de forma
+    casi proporcional a x y luego se satura. Aparece en adopción
+    de tecnología, saturación de red, crecimiento de usuarios.
+
+Linearización:
+    Dividimos x en ambos miembros:
+        x/y = (1 + b*e^(c*x)) / a = (1/a) + (b/a)*e^(c*x)
+
+    Con z = x/y, h = 1/a, k = b/a (y c conocido):
+        z = h*1 + k*e^(c*x)   →   lineal con base {1, e^(c*x)}
+
+¿Cómo conocer c?
+    El usuario estima c de la curvatura de los datos. Un c negativo
+    produce saturación creciente (la más común). Un c positivo
+    produce saturación decreciente.
+
+Recuperación:
+        a = 1/h       b = k/h
+
+Pasos en el código (resolver_caso4):
+    1. z[k] = xk/yk para cada punto
+    2. phi2(x) = exp(c_val * x)  (c_val capturado del scope)
+    3. Base {1, e^(cx)} evaluada en los puntos
+    4. Arma A y B con producto_discreto usando los z
+    5. Resuelve → h, k
+    6. a = 1/h, b = k/h, define p(x) = a*x/(1 + b*exp(c*x))
 
 
-6.4 Ejemplo resuelto
+-----------------------------------------------------------------
+9. APROXIMACIÓN DISCRETA LINEAL (interactiva)
+-----------------------------------------------------------------
 
-Problema: ajustar p(x) = a * e^(m*x) a los siguientes datos.
+La función aproximacion_discreta() permite resolver cualquier
+problema de aproximación discreta lineal con base elegida por
+el usuario.
 
-    x     y
-    1     7
-    2    11
-    3    17
-    4    27
+Pasos:
+    1. El usuario ingresa los pares (xk, yk).
+    2. El usuario ingresa las funciones base como strings.
+    3. Se evalúa cada función base en todos los xk:
+           base_vals[i][k] = fi_i(xk)
+    4. Se arma A: A[j][i] = producto_discreto(fi_i_vals, fi_j_vals)
+    5. Se arma B: B[j]    = producto_discreto(y_datos, fi_j_vals)
+    6. Se resuelve y se obtienen los coeficientes.
+    7. Se calcula el error con la fórmula del sistema normal.
+    8. Se muestra la tabla y el gráfico.
 
-Transformacion logaritmica:
 
-    x     y      ln(y)
-    1     7      1.945910
-    2    11      2.397895
-    3    17      2.833213
-    4    27      3.295837
+-----------------------------------------------------------------
+10. EJEMPLO DE INGENIERÍA EN SISTEMAS
+-----------------------------------------------------------------
 
-Sistema de ecuaciones normales (base {1, x} con datos y_ln):
+Problema real:
+    Un servidor de datos tiene sensor de consumo eléctrico.
+    Se midió el consumo (Watts) en 11 niveles de carga de CPU.
+    Se quiere modelar la relación para predecir consumo en cargas
+    intermedias y optimizar la gestión energética del centro.
 
-         fi1=1   fi2=x   |   B[j]
-  fi1=1    4      10     |  10.47286
-  fi2=x   10      30     |  28.42469
+Datos (11 puntos medidos):
+    Carga (%):   0   10   20   30   40   50   60   70   80   90  100
+    Consumo (W): 45   50   57   66   77   91  107  126  148  174  205
 
-Solucion del sistema:
+Modelo: f(x) = a * e^(b*x + c*x²)
+Justificación: a bajas cargas el incremento es suave; a cargas
+altas el procesador aumenta frecuencia y voltaje (tecnología
+DVFS), disparando el consumo de forma super-lineal. El exponente
+cuadrático captura esta aceleración.
 
-  h = a1 = 1.49693935
-  k = a2 = 0.44850982
+Resultado del ajuste:
+    p(x) = 44.04 * e^(0.01327*x + 0.00002*x²)
 
-Deshacemos la transformacion:
+Predicciones para ingeniería:
+    Carga  25%  →  ~62 W
+    Carga  55%  →  ~98 W
+    Carga  75%  → ~135 W
+    Carga  85%  → ~160 W
+    Carga  95%  → ~190 W
 
-  a = e^h = e^1.49693935 = 4.46799317
-  m = k   = 0.44850982
+Aplicación: dimensionar fuente de alimentación, planificar
+sistemas de refrigeración y calcular costo energético del
+servidor bajo distintas cargas de trabajo.
 
-Funcion encontrada:
-    p(x) = 4.467993 * e^(0.448510 * x)
 
-Error del metodo:
-    E = 0.20973276
+-----------------------------------------------------------------
+11. TABLA RESUMEN DE LINEARIZACIONES
+-----------------------------------------------------------------
 
-Verificacion con los datos originales:
+  Modelo                     Transf.       Base           Extra
+  ──────────────────────────────────────────────────────────────
+  a * e^(b*x + c*x²)         z = ln(y)    {1, x, x²}    ninguno
+  a * cos(b*x + π)           g=-cos(bx)   {g(x)}        b (período)
+  a / (b + x)                z = 1/y      {1, x}        ninguno
+  a*x / (1 + b*e^(c*x))      z = x/y      {1, e^(cx)}   c (curva)
 
-    x     y real     p(x)        |diferencia|
-    1.0     7.0      6.996774      0.003226
-    2.0    11.0     10.956786      0.043214
-    3.0    17.0     17.158073      0.158073
-    4.0    27.0     26.869146      0.130854
 
-La curva exponencial encontrada representa bien el crecimiento
-de los datos. Las diferencias son pequenas en relacion a la
-magnitud de los valores de y.
+-----------------------------------------------------------------
+12. ESTRUCTURA RESUMIDA DEL CÓDIGO
+-----------------------------------------------------------------
+
+  HERRAMIENTAS BASE
+    evaluar()               Evalúa string matemático
+    crear_funcion()         String → función de Python
+    producto_discreto()     Suma f[k]*g[k]
+    resolver_sistema()      Muestra y resuelve A*X = B
+
+  UTILIDADES NO LINEAL
+    pedir_datos()           Input de puntos (x, y)
+    mostrar_tabla()         Tabla comparativa + error
+    graficar()              Gráfico matplotlib
+    predecir()              Estimación en x nuevo
+
+  RESOLVERS (lógica matemática)
+    resolver_caso1()        Exponencial cuadrática
+    resolver_caso2()        Coseno (necesita b)
+    resolver_caso3()        Hipérbola
+    resolver_caso4()        Logística (necesita c)
+
+  FUNCIONES INTERACTIVAS (I/O + llaman al resolver)
+    caso1_interactivo()     Pide datos → caso 1
+    caso2_interactivo()     Pide datos + b → caso 2
+    caso3_interactivo()     Pide datos → caso 3
+    caso4_interactivo()     Pide datos + c → caso 4
+    aproximacion_no_lineal() Submenú con los 4 modelos
+    aproximacion_discreta() Discreta lineal completa
+
+  EJEMPLOS (datos hardcodeados)
+    ejemplo_discreta()      Soplete con Chebyshev
+    ejemplo_caso1()         Temperatura vs tiempo
+    ejemplo_caso2()         Datos coseno a=4, b=1
+    ejemplo_caso3()         Datos hipérbola a=6, b=2
+    ejemplo_caso4()         Datos logísticos a=10, b=5, c=-0.3
+    ejemplo_ingenieria()    Consumo servidor vs CPU (11 puntos)
+
+  MENÚ
+    menu()                  Menú principal del programa
 
 
 =================================================================
 Francisco Martin Gallardo  |  Santiago Ariel Martinez | Luciano Panella
-Analisis Numerico 2026  |  Facultad de Ingenieria  |  UM
+Análisis Numérico 2026  |  Facultad de Ingeniería  |  UM
 =================================================================
