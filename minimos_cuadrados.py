@@ -6,6 +6,7 @@ Proyecto Informático
 Autores:
     Francisco Martin Gallardo
     Santiago Ariel Martinez
+    Luciano Panella
 
 Para ejecutar:
     pip install numpy matplotlib
@@ -571,6 +572,108 @@ def ejemplo_caso4():
              f"p(x) = {a:.3f}·x / (1 + {b:.3f}·e^({c_val}·x))")
 
 
+def cargar_csv():
+    """
+    Carga datos desde un archivo CSV y resuelve el modelo no lineal
+    que el usuario elija. El CSV debe tener encabezados en la primera fila.
+    """
+    print("\n" + "=" * 60)
+    print("  CARGAR DATOS DESDE CSV")
+    print("=" * 60)
+
+    # Nombre del archivo
+    ruta = input("\n  Nombre del archivo CSV (Enter para usar datos_servidor.csv): ").strip()
+    if ruta == "":
+        ruta = "datos_servidor.csv"
+
+    # Leer el archivo
+    try:
+        with open(ruta, newline="", encoding="utf-8") as f:
+            import csv as _csv
+            lector = _csv.reader(f)
+            encabezados = next(lector)
+            filas = [fila for fila in lector]
+    except FileNotFoundError:
+        print(f"\n  ERROR: No se encontró el archivo '{ruta}'.")
+        return
+
+    print(f"\n  Archivo cargado: {len(filas)} filas encontradas.")
+    print(f"  Columnas disponibles:")
+    for i, col in enumerate(encabezados):
+        print(f"    [{i}] {col}")
+
+    # El usuario elige qué columnas usar
+    col_x = int(input("\n  Número de columna para X: "))
+    col_y = int(input("  Número de columna para Y: "))
+
+    x_datos = []
+    y_datos = []
+    errores = 0
+    for fila in filas:
+        try:
+            x_datos.append(float(fila[col_x]))
+            y_datos.append(float(fila[col_y]))
+        except (ValueError, IndexError):
+            errores += 1
+
+    if errores > 0:
+        print(f"\n  Se saltaron {errores} filas con valores no numericos.")
+
+    print(f"\n  Datos cargados: {len(x_datos)} puntos.")
+    print(f"  X ({encabezados[col_x]}): min={min(x_datos):.2f}  max={max(x_datos):.2f}")
+    print(f"  Y ({encabezados[col_y]}): min={min(y_datos):.2f}  max={max(y_datos):.2f}")
+
+    # El usuario elige el modelo
+    print("\n  Elegí el modelo para ajustar estos datos:")
+    print("  1. f(x) = a * e^(b*x + c*x²)        [Exp. cuadrática]")
+    print("  2. f(x) = a * cos(b*x + π)           [Coseno]")
+    print("  3. f(x) = a / (b + x)                [Hipérbola]")
+    print("  4. f(x) = a*x / (1 + b*e^(c*x))     [Logística]")
+
+    modelo = input("\n  Modelo: ").strip()
+
+    if modelo == "1":
+        p, a, b, c = resolver_caso1(x_datos, y_datos)
+        E = mostrar_tabla(x_datos, y_datos, p)
+        predecir(p)
+        graficar(x_datos, y_datos, p,
+                 f"CSV: {ruta}  —  Error = {E:.4f}",
+                 f"p(x) = {a:.4f}·e^({b:.5f}x + {c:.6f}x²)",
+                 xlabel=encabezados[col_x], ylabel=encabezados[col_y])
+
+    elif modelo == "2":
+        b_val = float(input("  Valor de b: "))
+        p, a = resolver_caso2(x_datos, y_datos, b_val)
+        E = mostrar_tabla(x_datos, y_datos, p)
+        predecir(p)
+        graficar(x_datos, y_datos, p,
+                 f"CSV: {ruta}  —  Error = {E:.4f}",
+                 f"p(x) = {a:.4f}·cos({b_val}·x + π)",
+                 xlabel=encabezados[col_x], ylabel=encabezados[col_y])
+
+    elif modelo == "3":
+        p, a, b = resolver_caso3(x_datos, y_datos)
+        E = mostrar_tabla(x_datos, y_datos, p)
+        predecir(p)
+        graficar(x_datos, y_datos, p,
+                 f"CSV: {ruta}  —  Error = {E:.4f}",
+                 f"p(x) = {a:.4f} / ({b:.4f} + x)",
+                 xlabel=encabezados[col_x], ylabel=encabezados[col_y])
+
+    elif modelo == "4":
+        c_val = float(input("  Valor de c: "))
+        p, a, b = resolver_caso4(x_datos, y_datos, c_val)
+        E = mostrar_tabla(x_datos, y_datos, p)
+        predecir(p)
+        graficar(x_datos, y_datos, p,
+                 f"CSV: {ruta}  —  Error = {E:.4f}",
+                 f"p(x) = {a:.4f}·x / (1 + {b:.4f}·e^({c_val}·x))",
+                 xlabel=encabezados[col_x], ylabel=encabezados[col_y])
+
+    else:
+        print("  Modelo no válido.")
+
+
 def ejemplo_ingenieria():
     """
     Aplicación a Ingeniería en Sistemas:
@@ -632,11 +735,12 @@ def menu():
     while True:
         print("\n" + "=" * 60)
         print("  MÍNIMOS CUADRADOS — Análisis Numérico UM 2026")
-        print("  Francisco Martin Gallardo | Santiago Ariel Martinez | Luciano Ariel Panella")
+        print("  Francisco Martin Gallardo | Santiago Ariel Martinez")
         print("=" * 60)
         print("  1. Aproximación discreta")
         print("  2. Aproximación discreta no lineal")
         print("  3. Ver ejemplos")
+        print("  4. Cargar datos desde CSV")
         print("  0. Salir")
 
         opcion = input("\n  Opción: ").strip()
@@ -646,6 +750,9 @@ def menu():
 
         elif opcion == "2":
             aproximacion_no_lineal()
+
+        elif opcion == "4":
+            cargar_csv()
 
         elif opcion == "3":
             while True:
