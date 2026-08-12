@@ -632,7 +632,7 @@ def menu():
     while True:
         print("\n" + "=" * 60)
         print("  MÍNIMOS CUADRADOS — Análisis Numérico UM 2026")
-        print("  Francisco Martin Gallardo | Santiago Ariel Martinez")
+        print("  Francisco Martin Gallardo | Santiago Ariel Martinez | Luciano Ariel Panella")
         print("=" * 60)
         print("  1. Aproximación discreta")
         print("  2. Aproximación discreta no lineal")
